@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Çeviri Stüdyosu — Ses</title>
+<style>
+:root{--navy:#0f2b46;--line:#e2e5ea;--muted:#6b7480;--bad:#c0392b}
+*{box-sizing:border-box}
+body{margin:0;font-family:Roboto,"Segoe UI",system-ui,Arial,sans-serif;background:#f4f5f7;color:#1c2430;font-size:15px}
+.wrap{max-width:1100px;margin:0 auto;padding:18px}
+h1{font-size:24px;margin:0 0 14px;color:var(--navy)}
+.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+.bar{display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap}
+select,input{font:inherit;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#fff;max-width:100%}
+select{font-weight:600}
+.btn{cursor:pointer;background:var(--navy);color:#fff;border:0;padding:12px 22px;border-radius:999px;font:inherit;font-weight:600}
+.btn.ghost{background:#fff;color:var(--navy);border:1px solid var(--line);border-radius:10px;padding:9px 14px}
+.btn.rec{background:var(--bad)}
+.btn:disabled{opacity:.5;cursor:default}
+.swap{cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:10px;padding:8px 13px;font-size:18px;line-height:1}
+.swap:hover{background:#eef1f5}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.row label{display:flex;gap:6px;align-items:center;font-size:14px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.box{min-height:300px;max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:14px;font-size:18px;line-height:1.7}
+.box p{margin:0 0 8px}.interim{color:#9aa3af}
+.spk{border:0;background:transparent;cursor:pointer;font-size:17px;padding:2px 8px 2px 0;vertical-align:middle;border-radius:8px}
+.spk:hover{background:#eef1f5}
+.av{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;font-size:18px;vertical-align:middle;margin-right:4px;cursor:pointer;user-select:none}
+.av.f{background:#fde2ef}.av.m{background:#dbeafe}
+mark.hl{background:#c0392b;color:#fff;border-radius:4px;padding:0 3px}
+.muted{color:var(--muted);font-size:13px}
+h4{margin:0 0 6px;font-size:13px;color:var(--muted)}
+.cfg{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cfg label{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.err{color:var(--bad);font-size:14px;min-height:20px}
+@media(max-width:800px){.cols,.cfg{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="row" style="margin-bottom:14px">
+    <a class="btn ghost" id="back" href="#" style="display:none;text-decoration:none">← Geri</a>
+    <h1 style="margin:0">🎙️ Ses çevirisi</h1>
+  </div>
+
+  <details class="card" id="cfgbox">
+    <summary><b>Bağlantı ayarları</b> <span class="muted" id="cfgstate"></span></summary>
+    <div class="cfg" style="margin-top:10px">
+      <label>Web uygulaması adresi (…/exec)<input id="url" placeholder="https://script.google.com/macros/s/.../exec"></label>
+      <label>Belirteç (E-Tablo menüsü → Voice için belirteç)<input id="token" type="password"></label>
+    </div>
+    <div class="row" style="margin-top:10px"><button class="btn ghost" id="save">Kaydet ve sına</button><span class="muted">Bilgiler yalnızca bu tarayıcıda saklanır.</span></div>
+  </details>
+
+  <div class="card bar">
+    <select id="src"></select>
+    <button class="swap" id="swap" title="Dilleri yer değiştir">⇄</button>
+    <select id="tgt"></select>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button class="btn" id="btn">🎙️ Konuşmaya başla</button>
+      <label><input type="checkbox" id="speak"> Çeviriyi sesli oku</label>
+      <label>Konuşan <select id="gender"></select></label>
+      <label id="accWrap" style="display:none">Aksan <select id="accent"></select></label>
+      <label>Ses kaynağı
+        <select id="engine"><option value="auto">Otomatik</option><option value="browser">Tarayıcı sesleri</option><option value="server">Sunucu sesleri</option></select>
+      </label>
+      <span class="muted" id="ttsinfo"></span>
+      <button class="btn ghost" id="clear">Temizle</button>
+      <span class="muted" id="status"></span>
+    </div>
+    <div class="row">
+      <label>Dışa aktar
+        <select id="fmt"><option value="mp3">MP3 (ses)</option><option value="mp4">MP4 (video)</option></select>
+      </label>
+      <button class="btn ghost" id="dl">⬇ İndir</button>
+      <span class="muted" id="dlstat"></span>
+    </div>
+    <div class="err" id="err"></div>
+    <div class="cols">
+      <div><h4>Söylenen</h4><div class="box" id="in"></div></div>
+      <div><h4>Çeviri <span class="muted">(🔊 tekrar dinle · avatara tıklayınca konuşan değişir)</span></h4><div class="box" id="out"></div></div>
+    </div>
+    <p class="muted">Chrome veya Edge gerekir. Tarayıcı mikrofon izni isteyecek. Video dışa aktarma gerçek zamanlı çalışır; bitene kadar sekmeyi açık ve görünür bırakın.</p>
+  </div>
+</div>
+
+<script>window.VOICE_CFG =  null;</script>
+<script>
+const LANGS = [['tr','Türkçe','tr-TR'],['en','İngilizce','en-US'],['de','Almanca','de-DE'],['fr','Fransızca','fr-FR'],['es','İspanyolca','es-ES'],['it','İtalyanca','it-IT'],['pt','Portekizce','pt-PT'],['nl','Felemenkçe','nl-NL'],['pl','Lehçe','pl-PL'],['ru','Rusça','ru-RU'],['uk','Ukraynaca','uk-UA'],['ar','Arapça','ar-SA'],['ja','Japonca','ja-JP'],['ko','Korece','ko-KR'],['zh-CN','Çince','zh-CN'],['sv','İsveççe','sv-SE'],['da','Danca','da-DK'],['fi','Fince','fi-FI'],['el','Yunanca','el-GR'],['cs','Çekçe','cs-CZ'],['ro','Romence','ro-RO'],['hu','Macarca','hu-HU'],['bg','Bulgarca','bg-BG'],['id','Endonezce','id-ID']];
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = { get: k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+const speechCode = c => (LANGS.find(l => l[0] === c) || [])[2] || c;
+const langName = c => (LANGS.find(l => l[0] === c) || [])[1] || c;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const isBad = s => String(s.tgt).startsWith('⚠');
+
+
+(function () {
+  let c = window.VOICE_CFG;
+  if (!c && location.hash) { const h = new URLSearchParams(location.hash.slice(1)); if (h.get('u') && h.get('t')) c = { u: h.get('u'), t: h.get('t') }; }
+  if (c && c.u && c.t) { store.set('v_url', c.u); store.set('v_token', c.t); try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {} }
+})();
+
+
+(function () {
+  const u = store.get('v_url');
+  if (/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(u)) { const a = $('#back'); a.href = u + '?page=voice'; a.style.display = 'inline-block'; }
+})();
+
+$('#src').innerHTML = LANGS.map(l => `<option value="${l[0]}">${l[1]}</option>`).join('');
+$('#tgt').innerHTML = $('#src').innerHTML;
+$('#src').value = store.get('v_src') || 'en'; $('#tgt').value = store.get('v_tgt') || 'tr';
+// 5 kadın + 5 erkek konuşan: her birinin avatarı, ses perdesi ve hızı farklı.
+
+const FP = [{n:'Ayşe',e:'👩',p:1.0,r:1.0},{n:'Elif',e:'👩‍🦰',p:1.15,r:1.0},{n:'Zeynep',e:'👱‍♀️',p:0.92,r:0.95},{n:'Selin',e:'👩‍🦱',p:1.3,r:1.05},{n:'Defne',e:'👩‍🦳',p:1.08,r:0.9}];
+const MP = [{n:'Ahmet',e:'👨',p:0.8,r:1.0},{n:'Mehmet',e:'👨‍🦰',p:0.65,r:0.95},{n:'Can',e:'👱‍♂️',p:0.92,r:1.05},{n:'Serdar',e:'👨‍🦱',p:0.55,r:0.9},{n:'Burak',e:'👨‍🦳',p:0.75,r:1.0}];
+const ALLP = FP.map((x, i) => Object.assign({ id: 'f' + i, g: 'f', i }, x)).concat(MP.map((x, i) => Object.assign({ id: 'm' + i, g: 'm', i }, x)));
+const persona = id => ALLP.find(p => p.id === id) || ALLP[0];
+const optsOf = g => ALLP.filter(p => p.g === g).map(p => `<option value="${p.id}">${p.e} ${p.n}</option>`).join('');
+$('#gender').innerHTML = '<optgroup label="Kadın">' + optsOf('f') + '</optgroup><optgroup label="Erkek">' + optsOf('m') + '</optgroup>';
+(function () { let gv = store.get('v_gender'); if (gv.length === 1) gv += '0'; $('#gender').value = ALLP.some(p => p.id === gv) ? gv : 'f0'; })();
+
+// Aksan / lehçe seçenekleri (birden fazla bölgesel varyantı olan diller)
+const ACCENTS = {
+  en: [['en-US', 'ABD'], ['en-GB', 'İngiltere'], ['en-AU', 'Avustralya'], ['en-IN', 'Hindistan']],
+  es: [['es-ES', 'İspanya'], ['es-US', 'ABD (Latin)'], ['es-MX', 'Meksika']],
+  fr: [['fr-FR', 'Fransa'], ['fr-CA', 'Kanada']],
+  pt: [['pt-PT', 'Portekiz'], ['pt-BR', 'Brezilya']]
+};
+function fillAccents() {
+  const l = $('#tgt').value, list = ACCENTS[l], w = $('#accWrap');
+  if (!list) { w.style.display = 'none'; $('#accent').innerHTML = ''; return; }
+  w.style.display = '';
+  $('#accent').innerHTML = list.map(a => `<option value="${a[0]}">${a[1]}</option>`).join('');
+  const sv = store.get('v_acc_' + l); if (list.some(a => a[0] === sv)) $('#accent').value = sv;
+}
+const curLoc = () => (ACCENTS[$('#tgt').value] && $('#accent').value) ? $('#accent').value : speechCode($('#tgt').value);
+const locOf = s => s.ac || speechCode(s.tl);
+fillAccents();
+$('#engine').value = store.get('v_engine') || 'auto';
+$('#engine').onchange = () => store.set('v_engine', $('#engine').value);
+$('#accent').onchange = () => { store.set('v_acc_' + $('#tgt').value, $('#accent').value); V.segs.forEach(s => { s.ac = $('#accent').value; }); };
+$('#url').value = store.get('v_url'); $('#token').value = store.get('v_token');
+$('#cfgbox').open = !($('#url').value && $('#token').value);
+
+async function api(params) {
+  const q = new URLSearchParams(Object.assign({ token: $('#token').value.trim() }, params));
+  const base = $('#url').value.trim();
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(base))
+    throw new Error('Adres "https://script.google.com/macros/s/…/exec" biçiminde olmalı (…/dev veya düzenleyici adresi çalışmaz).');
+  let j;
+  try {
+    const r = await fetch(base + '?' + q.toString());
+    j = await r.json();
+  } catch (e) {
+    throw new Error('Web uygulamasına ulaşılamadı. Dağıtımın erişimi "Herkes" olmalı ve değişiklikten sonra YENİ SÜRÜM dağıtılmalı. Adres çubuğuna adres + ?action=ping&token=BELİRTEÇ yazıp {"ok":true} görüp görmediğinizi kontrol edin.');
+  }
+  if (!j.ok) throw new Error(j.error || 'API hatası');
+  return j;
+}
+$('#save').onclick = async () => {
+  store.set('v_url', $('#url').value.trim()); store.set('v_token', $('#token').value.trim());
+  try { const pr = await api({ action: 'ping' }); V.tts = pr.tts || 'basic'; showTts(); $('#cfgstate').textContent = '— bağlantı başarılı ✓'; $('#cfgbox').open = false; $('#err').textContent = ''; }
+  catch (e) { $('#cfgstate').textContent = ''; $('#err').textContent = 'Bağlantı kurulamadı: ' + e.message + ' (Dağıtım erişimi "Herkes" olmalı ve adres …/exec ile bitmeli.)'; }
+};
+
+ 
+
+const V = { rec: null, on: false, segs: [], interim: '', speaking: null, queue: [], fake: [] };
+
+function render(scroll) {
+  $('#in').innerHTML = V.segs.map(s => `<p dir="auto">${esc(s.src)}</p>`).join('') + (V.interim ? `<p class="interim">${esc(V.interim)}</p>` : '');
+  $('#out').innerHTML = V.segs.map((s, i) => {
+    if (s.tgt === null) return '<p>…</p>';
+    const ok = !isBad(s);
+    const P = persona(s.v);
+    return `<p data-i="${i}">${ok ? `<span class="av ${P.g}" data-i="${i}" title="${P.n} — konuşanı değiştirmek için tıklayın">${P.e}</span><button class="spk" data-i="${i}" title="Tekrar seslendir">🔊</button>` : ''}<span class="tx" dir="auto">${esc(s.tgt)}</span></p>`;
+  }).join('');
+  if (scroll !== false) ['#in', '#out'].forEach(k => { const e = $(k); e.scrollTop = e.scrollHeight; });
+}
+
+ 
+let VOICES = [];
+function loadVoices() { VOICES = window.speechSynthesis ? speechSynthesis.getVoices() : []; }
+if (window.speechSynthesis) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+const FEM = /female|woman|zira|jenny|aria|emel|filiz|seda|elsa|katja|hedda|denise|hortense|helena|paola|elvira|sabina|maria|paulina|ioana|svetlana|irina|yelda|tessa|samantha|karen|susan|libby|sonia|yaoyao|huihui|xiaoxiao|xiaoyi|nanami|aoi|mayu|shiori|sunhi|jimin|seohyeon|heami|amelie|alice|carmen|francisca|isabel|laura|lucia|zosia|ewa|katya|anna|sara|nora|hanna|natasha|clara|neerja|dalia|amala|vivienne|eloise|brigitte|ariel|colette|isabella|fabiola|sabela|ximena|margarita|reyna|brenda|athina|kalina|polina|zariyah|salma|fatima|rana|amina|ingrid|sofie|pernille|vera|marie|noora|selma|charline|fenna|elena|giulia|dariya|oksana|katarina|ana|lucie|vlasta|andrew female/i;
+const MAL = /\bmale\b|david|mark|guy|ryan|tolga|ahmet|stefan|conrad|claude|paul|pablo|cosimo|diego|andrei|pavel|daniel|alex|george|james|ravi|yunyang|yunxi|yunjian|kangkang|keita|naoki|daichi|injoon|bongjin|gookmin|jorge|luca|bart|filip|davis|tony|jason|eric|christopher|roger|steffan|thomas|mitchell|liam|prabhat|killian|jonas|henri|antoine|jean|gerard|alvaro|arnau|dario|valerio|benigno|gonzalo|nestoras|borislav|ostap|hamed|shakir|taim|maarten|jan|rasmus|finn|osman|mehmet|can|Serdar|burak/i;
+
+function pickVoice(lang, P) {
+  const base = (/-/.test(lang) ? lang : speechCode(lang)).toLowerCase();
+  let c = VOICES.filter(v => v.lang.toLowerCase().replace('_', '-') === base);
+  if (!c.length) c = VOICES.filter(v => v.lang.toLowerCase().startsWith(base.slice(0, 2)));
+  if (!c.length) return null;
+  const pool = c.filter(v => P.g === 'm' ? (MAL.test(v.name) && !FEM.test(v.name)) : FEM.test(v.name));
+  const list = pool.length ? pool : c;
+  return list[P.i % list.length];
+}
+function hasBrowserVoice(lang) {   
+  const b = (/-/.test(lang) ? lang : speechCode(lang)).toLowerCase().slice(0, 2);
+  return !!window.speechSynthesis && VOICES.some(v => v.lang.toLowerCase().startsWith(b));
+}
+function wordAt(text, p) {         
+  const ws = [], re = /\S+/g; let m;
+  while ((m = re.exec(text))) ws.push([m.index, m.index + m[0].length]);
+  if (!ws.length) return [0, 0];
+  const total = ws.reduce((n, w) => n + (w[1] - w[0]) + 2, 0); let acc = 0;
+  for (const w of ws) { acc += (w[1] - w[0]) + 2; if (acc >= p * total) return w; }
+  return ws[ws.length - 1];
+}
+
+function txEl(i) { return document.querySelector('#out p[data-i="' + i + '"] .tx'); }
+function mark(i, a, b) {
+  const s = V.segs[i], el = txEl(i); if (!s || !el) return;
+  el.innerHTML = esc(s.tgt.slice(0, a)) + (b > a ? '<mark class="hl">' + esc(s.tgt.slice(a, b)) + '</mark>' : '') + esc(s.tgt.slice(b));
+}
+function clearFake() { V.fake.forEach(clearTimeout); V.fake = []; }   
+function fakeHighlight(i, rate) {   
+  const t = V.segs[i].tgt, re = /\S+/g; let m, at = 0;
+  while ((m = re.exec(t))) {
+    const a = m.index, b = a + m[0].length, when = at;
+    V.fake.push(setTimeout(() => mark(i, a, b), when));
+    at += (m[0].length * 65 + 110) / (rate || 1);
+  }
+}
+function stopSpeak() {
+  clearFake();
+  const sp = V.speaking; V.speaking = null;
+  if (sp && sp.audio) { try { sp.audio.pause(); } catch (e) {} }
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  render(false);
+}
+function speakNext() { if (!V.speaking && V.queue.length) speakSeg(V.queue.shift(), true); }
+
+const AUDIO_CACHE = new Map();
+async function ttsUrl(text, lang, P, loc) {  
+  const k = [loc, P.id, text].join('|');
+  if (!AUDIO_CACHE.has(k)) AUDIO_CACHE.set(k, URL.createObjectURL(new Blob([await fetchMp3(text, lang, P, loc)], { type: 'audio/mpeg' })));
+  return AUDIO_CACHE.get(k);
+}
+
+function speakSeg(i, auto) {
+  const s = V.segs[i]; if (!s || s.tgt === null || isBad(s)) return;
+  if (auto && V.speaking) { V.queue.push(i); return; }
+  if (!auto) { V.queue = []; stopSpeak(); }
+  const P = persona(s.v);
+  const eng = $('#engine').value, loc = locOf(s);
+  const remote = eng === 'server' || (eng === 'auto' && V.tts === 'cloud') || !hasBrowserVoice(loc);
+  if (remote) speakRemote(i, s, P); else speakBrowser(i, s, P);   
+}
+function speakBrowser(i, s, P) {
+  const u = new SpeechSynthesisUtterance(s.tgt);
+  u.lang = locOf(s);
+  const v = pickVoice(locOf(s), P); if (v) u.voice = v;
+  u.pitch = P.p; u.rate = P.r;
+  let gotBoundary = false;
+  u.onstart = () => { setTimeout(() => { if (!gotBoundary && V.speaking === u) fakeHighlight(i, u.rate); }, 700); };
+  u.onboundary = e => {
+    if (e.name && e.name !== 'word') return;
+    gotBoundary = true; clearFake();
+    const a = e.charIndex, len = e.charLength || ((/^\S+/.exec(s.tgt.slice(a)) || [''])[0].length || 1);
+    mark(i, a, a + len);
+  };
+  const fin = () => { if (V.speaking !== u) return; clearFake(); V.speaking = null; mark(i, 0, 0); speakNext(); };
+  u.onend = fin; u.onerror = fin;
+  V.speaking = u;
+  speechSynthesis.speak(u);
+}
+async function speakRemote(i, s, P) {
+  const token = { audio: null }; V.speaking = token;
+  setStat('Ses hazırlanıyor…');
+  try {
+    const url = await ttsUrl(s.tgt, s.tl, P, locOf(s));
+    if (V.speaking !== token) return;
+    const a = new Audio(url); token.audio = a;
+    a.preservesPitch = false; a.mozPreservesPitch = false; a.webkitPreservesPitch = false;
+    a.playbackRate = V.tts === 'cloud' ? 1 : Math.min(1.3, Math.max(0.7, P.p));      
+    const fin = () => { if (V.speaking !== token) return; clearFake(); V.speaking = null; mark(i, 0, 0); speakNext(); };
+    a.onended = fin; a.onerror = fin;
+    a.onplay = () => { V.fake.push(setInterval(() => { if (a.duration) { const w = wordAt(s.tgt, a.currentTime / a.duration); mark(i, w[0], w[1]); } }, 60)); };
+    setStat(''); await a.play();
+  } catch (e) {
+    if (V.speaking === token) { clearFake(); V.speaking = null; speakNext(); }
+    setStat(''); $('#err').textContent = 'Seslendirilemedi: ' + e.message;
+  }
+}
+
+$('#out').addEventListener('click', e => {
+  const av = e.target.closest('.av'), b = e.target.closest('.spk');
+  if (av) { const s = V.segs[Number(av.dataset.i)]; if (s) { const k = ALLP.findIndex(p => p.id === s.v); s.v = ALLP[(k + 1) % ALLP.length].id; render(false); } return; }
+  if (b) speakSeg(Number(b.dataset.i), false);
+});
+
+ 
+async function push(text) {
+  const seg = { src: text, sl: $('#src').value, tgt: null, tl: $('#tgt').value, v: $('#gender').value, ac: curLoc() };
+  V.segs.push(seg); render();
+  try {
+    const r = await api({ action: 'translate', text, src: seg.sl, tgt: seg.tl });
+    seg.tgt = r.text;
+  } catch (e) { seg.tgt = '⚠ ' + e.message; }
+  render();
+  if ($('#speak').checked) speakSeg(V.segs.indexOf(seg), true);
+}
+
+
+async function retranslateAll() {
+  const tgt = $('#tgt').value; if (!V.segs.length) return;
+  stopSpeak(); V.queue = [];
+  V.segs.forEach(s => { s.tgt = null; s.tl = tgt; s.ac = curLoc(); }); render(false);
+  for (const s of V.segs) {
+    try { s.tgt = (await api({ action: 'translate', text: s.src, src: s.sl || $('#src').value, tgt })).text; }
+    catch (e) { s.tgt = '⚠ ' + e.message; }
+    render(false);
+  }
+  if ($('#speak').checked) speakSeg(V.segs.length - 1, false);
+}
+
+$('#src').onchange = () => { store.set('v_src', $('#src').value); if (V.on) { stop(); start(); } };
+$('#tgt').onchange = () => { store.set('v_tgt', $('#tgt').value); fillAccents(); retranslateAll(); };
+$('#swap').onclick = () => {          
+  const s = $('#src').value, t = $('#tgt').value;
+  $('#src').value = t; $('#tgt').value = s;
+  store.set('v_src', t); store.set('v_tgt', s); fillAccents();
+  if (V.on) { stop(); start(); }
+};
+$('#gender').onchange = () => store.set('v_gender', $('#gender').value);
+
+function start() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { $('#err').textContent = 'Bu tarayıcı konuşma tanımayı desteklemiyor. Chrome veya Edge kullanın.'; return; }
+  if (!$('#url').value || !$('#token').value) { $('#cfgbox').open = true; $('#err').textContent = 'Önce bağlantı ayarlarını girin.'; return; }
+  $('#err').textContent = '';
+  const rec = new SR(); V.rec = rec; V.on = true;
+  rec.lang = speechCode($('#src').value); rec.continuous = true; rec.interimResults = true;
+  rec.onresult = e => {
+    V.interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i], t = r[0].transcript.trim();
+      if (r.isFinal) { if (t) push(t); } else V.interim += t + ' ';
+    }
+    render();
+  };
+  rec.onerror = e => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      $('#err').textContent = 'Mikrofon izni verilmedi. Adres çubuğundaki kilit simgesinden bu site için mikrofonu "İzin ver" yapın. Dosyayı çift tıklayıp açtıysanız, https ile yayınlanmış bir adresten açmayı deneyin.';
+      stop();
+    }
+  };
+  rec.onend = () => { if (V.on) { try { rec.start(); } catch (e) {} } };
+  try { rec.start(); } catch (e) {}
+  $('#btn').textContent = '⏹ Konuşmayı durdur'; $('#btn').classList.add('rec'); $('#status').textContent = 'dinleniyor…';
+}
+function stop() {
+  V.on = false; try { V.rec && V.rec.stop(); } catch (e) {}
+  V.interim = ''; render();
+  $('#btn').textContent = '🎙️ Konuşmaya başla'; $('#btn').classList.remove('rec'); $('#status').textContent = '';
+}
+function showTts() {
+  $('#ttsinfo').textContent = V.tts === 'cloud' ? 'Sunucu sesi: Google Cloud (her konuşan farklı ses)' : 'Sunucu sesi: temel (tek ses) — çok sesli için Cloud TTS anahtarı ekleyin';
+}
+V.tts = 'basic';
+if ($('#url').value && $('#token').value) api({ action: 'ping' }).then(r => { V.tts = r.tts || 'basic'; showTts(); }).catch(() => {});
+showTts();
+$('#btn').onclick = () => V.on ? stop() : start();
+$('#clear').onclick = () => { stopSpeak(); V.queue = []; V.segs = []; V.interim = ''; render(); };
+
+ 
+const setStat = t => { $('#dlstat').textContent = t; };
+function downloadBlob(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
+async function fetchMp3(text, lang, P, loc) {
+  const r = await api({ action: 'tts', text, lang, loc: loc || lang, g: P ? P.g : 'f', i: P ? P.i : 0, p: P ? P.p : 1, r: P ? P.r : 1 });
+  const arrs = r.parts.map(b64 => { const bin = atob(b64), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; });
+  const out = new Uint8Array(arrs.reduce((n, a) => n + a.length, 0)); let o = 0;
+  arrs.forEach(a => { out.set(a, o); o += a.length; });
+  return out;
+}
+
+
+function layoutText(g, text, W, H) {
+  const x0 = 300, maxW = W - x0 - 60;
+  for (let size = 52; size >= 26; size -= 4) {
+    g.font = 'bold ' + size + 'px "Segoe UI",Roboto,Arial,sans-serif';
+    const lineH = Math.round(size * 1.45), words = [], re = /\S+/g; let m, x = 0, line = 0;
+    const space = g.measureText(' ').width;
+    while ((m = re.exec(text))) {
+      const w = g.measureText(m[0]).width;
+      if (x > 0 && x + w > maxW) { x = 0; line++; }
+      words.push({ t: m[0], x: x0 + x, line, w }); x += w + space;
+    }
+    const lines = line + 1;
+    if (lines * lineH <= H - 280 || size === 26) return { words, size, lineH, lines };
+  }
+}
+function drawFrame(g, W, H, s, L, p) {
+  g.fillStyle = '#0f2b46'; g.fillRect(0, 0, W, H);
+  
+  const P = persona(s.v);
+  g.beginPath(); g.arc(150, H / 2 - 20, 90, 0, Math.PI * 2); g.fillStyle = P.g === 'm' ? '#93c5fd' : '#f9a8d4'; g.fill();
+  g.font = '100px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#000'; g.fillText(P.e, 150, H / 2 - 16);
+  g.font = 'bold 26px "Segoe UI",Roboto,Arial,sans-serif'; g.fillStyle = '#e8eef5'; g.textAlign = 'center'; g.fillText(P.n, 150, H / 2 + 100);
+  g.textAlign = 'left';
+  
+  g.font = '24px "Segoe UI",Roboto,Arial,sans-serif'; g.fillStyle = '#9fb3c8'; g.textBaseline = 'alphabetic';
+  g.fillText(langName(s.sl) + '  →  ' + langName(s.tl), 60, 50);
+  
+  const total = L.words.reduce((n, w) => n + w.t.length + 2, 0);
+  let hi = -1;
+  if (p <= 1) { let acc = 0; for (let i = 0; i < L.words.length; i++) { acc += L.words[i].t.length + 2; if (acc >= p * total) { hi = i; break; } } }
+  const top = (H - L.lines * L.lineH) / 2 - 20;
+  g.font = 'bold ' + L.size + 'px "Segoe UI",Roboto,Arial,sans-serif';
+  L.words.forEach((w, i) => {
+    const y = top + (w.line + 1) * L.lineH - L.lineH * 0.28;
+    if (i === hi) {
+      g.fillStyle = '#c0392b'; g.fillRect(w.x - 8, y - L.size * 0.95, w.w + 16, L.lineH * 0.98);
+      g.fillStyle = '#ffffff';
+    } else g.fillStyle = '#e8eef5';
+    g.fillText(w.t, w.x, y);
+  });
+  
+  g.font = '26px "Segoe UI",Roboto,Arial,sans-serif'; g.fillStyle = '#9fb3c8';
+  let src = s.src; while (g.measureText(src).width > W - 120 && src.length > 4) src = src.slice(0, -2);
+  if (src !== s.src) src += '…';
+  g.fillText(src, 60, H - 50);
+}
+function playClip(ctx, dest, buf, s, g, W, H) {
+  return new Promise(res => {
+    const L = layoutText(g, s.tgt, W, H), src = ctx.createBufferSource();
+    src.buffer = buf; src.connect(dest);
+    const t0 = ctx.currentTime + 0.05, dur = buf.duration;
+    const timer = setInterval(() => drawFrame(g, W, H, s, L, Math.max(0, Math.min(1, (ctx.currentTime - t0) / dur))), 40);
+    src.onended = () => { clearInterval(timer); drawFrame(g, W, H, s, L, 2); res(); };
+    src.start(t0);
+  });
+}
+async function makeMp4(clips) {
+  if (!window.MediaRecorder) throw new Error('Bu tarayıcı video kaydını desteklemiyor (Chrome/Edge kullanın).');
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const bufs = []; for (const c of clips) bufs.push(await ctx.decodeAudioData(c.bytes.buffer.slice(0)));
+  const W = 1280, H = 720, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'), dest = ctx.createMediaStreamDestination();
+  drawFrame(g, W, H, clips[0].s, layoutText(g, clips[0].s.tgt, W, H), 2);
+  const stream = new MediaStream([...cv.captureStream(25).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+  const mime = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t));
+  if (!mime) throw new Error('Bu tarayıcı video kaydını desteklemiyor.');
+  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2500000 }), chunks = [];
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  const stopped = new Promise(r => rec.onstop = r);
+  await ctx.resume(); rec.start(250);
+  for (let k = 0; k < clips.length; k++) {
+    setStat('Video oluşturuluyor… ' + (k + 1) + '/' + clips.length + ' (sekmeyi açık bırakın)');
+    await playClip(ctx, dest, bufs[k], clips[k].s, g, W, H);
+    await sleep(250);
+  }
+  await sleep(300); rec.stop(); await stopped; ctx.close();
+  const mp4 = /mp4/.test(rec.mimeType || mime);
+  downloadBlob(new Blob(chunks, { type: mp4 ? 'video/mp4' : 'video/webm' }), mp4 ? 'ceviri.mp4' : 'ceviri.webm');
+  if (!mp4) $('#err').textContent = 'Bu tarayıcı MP4 kaydedemedi; video WebM olarak indirildi (Chrome/Edge güncel sürümleri MP4 destekler).';
+}
+
+$('#dl').onclick = async () => {
+  const items = V.segs.filter(s => s.tgt && !isBad(s));
+  if (!items.length) { $('#err').textContent = 'İndirilecek çeviri yok.'; return; }
+  $('#err').textContent = ''; stopSpeak(); V.queue = []; $('#dl').disabled = true;
+  try {
+    const clips = [];
+    for (let i = 0; i < items.length; i++) {
+      setStat('Ses hazırlanıyor… ' + (i + 1) + '/' + items.length);
+      clips.push({ s: items[i], bytes: await fetchMp3(items[i].tgt, items[i].tl, persona(items[i].v), locOf(items[i])) });
+    }
+    if ($('#fmt').value === 'mp3') downloadBlob(new Blob(clips.map(c => c.bytes), { type: 'audio/mpeg' }), 'ceviri.mp3');
+    else await makeMp4(clips);
+    setStat('Hazır ✓');
+  } catch (e) { setStat(''); $('#err').textContent = 'Dışa aktarılamadı: ' + e.message; }
+  finally { $('#dl').disabled = false; }
+};
+</script>
+</body>
+</html>
